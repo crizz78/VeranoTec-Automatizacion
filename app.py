@@ -1,3 +1,4 @@
+import re
 import sqlite3
 from flask import Flask, render_template_string, request, redirect, url_for, flash
 from datetime import datetime
@@ -5,6 +6,9 @@ from datetime import datetime
 app = Flask(__name__)
 app.secret_key = "veranotec_portal_alumno_2026"
 DB_NAME = "veranotec.db"
+
+# Expresión regular oficial para números de control ITMH (Años 24-26 + Plantel 660 + Consecutivo 001-500)
+REGEX_CONTROL = re.compile(r"^(24|25|26)660(00[1-9]|0[1-9][0-9]|[1-4][0-9]{2}|500)$")
 
 # ==========================================
 # BASE DE DATOS RELACIONAL (SQLITE)
@@ -44,17 +48,17 @@ def init_db():
 
     if c.execute("SELECT COUNT(*) FROM materias").fetchone()[0] == 0:
         materias_init = [
-            ("FIS-01", "Ing. en Sistemas Computacionales", "SCC-1007", "Fundamentos de Ingeniería de Software", "Ing. Roberto Martínez (Simulado)", "Lun-Vie 08:00 - 10:00 | Aula CC-2", "Fundamentos de Programación", 10, "En espera (Falta 1 lugar)"),
-            ("MAT-02", "Ing. en Sistemas Computacionales", "ACF-0902", "Cálculo Integral", "M.C. Laura Sánchez (Simulado)", "Lun-Vie 10:00 - 12:00 | Aula B-4", "Cálculo Diferencial", 10, "En recolección de demanda"),
-            ("BDD-03", "Ing. en Sistemas Computacionales", "AEF-1031", "Fundamentos de Bases de Datos", "Ing. Carlos Hernández (Simulado)", "Lun-Vie 12:00 - 14:00 | Lab. Cómputo 1", "Taller de Programación", 10, "En recolección de demanda"),
-            ("IND-01", "Ing. Industrial", "INC-1009", "Estudio del Trabajo I", "Ing. Patricia Gómez (Simulado)", "Lun-Vie 08:00 - 10:00 | Aula D-1", "Probabilidad y Estadística", 10, "En recolección de demanda"),
-            ("IGE-01", "Ing. en Gestión Empresarial", "GEC-0905", "Costos Empresariales", "M.A. Fernando Ruiz (Simulado)", "Lun-Vie 10:00 - 12:00 | Aula E-3", "Contabilidad Orientada a los Negocios", 10, "En recolección de demanda")
+            ("FIS-01", "Ing. en Sistemas Computacionales", "SCC-1007", "Fundamentos de Ingeniería de Software", "Ing. Roberto Martínez (Simulado)", "Lun-Vie 08:00 - 10:00 | Aula CC-2", "Fundamentos de Programación", 6, "En espera (Falta 1 lugar)"),
+            ("MAT-02", "Ing. en Sistemas Computacionales", "ACF-0902", "Cálculo Integral", "M.C. Laura Sánchez (Simulado)", "Lun-Vie 10:00 - 12:00 | Aula B-4", "Cálculo Diferencial", 6, "En recolección de demanda"),
+            ("BDD-03", "Ing. en Sistemas Computacionales", "AEF-1031", "Fundamentos de Bases de Datos", "Ing. Carlos Hernández (Simulado)", "Lun-Vie 12:00 - 14:00 | Lab. Cómputo 1", "Taller de Programación", 6, "En recolección de demanda"),
+            ("IND-01", "Ing. Industrial", "INC-1009", "Estudio del Trabajo I", "Ing. Patricia Gómez (Simulado)", "Lun-Vie 08:00 - 10:00 | Aula D-1", "Probabilidad y Estadística", 6, "En recolección de demanda"),
+            ("IGE-01", "Ing. en Gestión Empresarial", "GEC-0905", "Costos Empresariales", "M.A. Fernando Ruiz (Simulado)", "Lun-Vie 10:00 - 12:00 | Aula E-3", "Contabilidad Orientada a los Negocios", 6, "En recolección de demanda")
         ]
         c.executemany("INSERT INTO materias VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", materias_init)
 
-        # Precarga de 9 alumnos simulados en SCC-1007 para demostrar el cierre de cupo al entrar el #10
-        precarga_fis = [(f"2466090{i}", f"Alumno Simulado {i}", "Ing. en Sistemas Computacionales", "FIS-01", None, 0, "2026-11-25 08:00:00") for i in range(1, 10)]
-        precarga_mat = [(f"2466091{i}", f"Alumno Simulado {i}", "Ing. en Sistemas Computacionales", "MAT-02", None, 0, "2026-11-25 08:00:00") for i in range(1, 6)]
+        # Precarga de 5 alumnos simulados en SCC-1007 (para abrir/cerrar cupo al entrar el #6) y 3 en MAT-02
+        precarga_fis = [(f"2466090{i}", f"Alumno Simulado {i}", "Ing. en Sistemas Computacionales", "FIS-01", None, 0, "2026-11-25 08:00:00") for i in range(1, 6)]
+        precarga_mat = [(f"2566091{i}", f"Alumno Simulado {i}", "Ing. en Sistemas Computacionales", "MAT-02", None, 0, "2026-11-25 08:00:00") for i in range(1, 4)]
         c.executemany("INSERT INTO inscripciones (num_control, nombre_alumno, carrera, materia_id, referencia, pagado, fecha_registro) VALUES (?, ?, ?, ?, ?, ?, ?)", precarga_fis + precarga_mat)
 
     conn.commit()
@@ -69,10 +73,11 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VeranoTec | Portal Estudiantil de Cursos de Verano</title>
+    <title>VeranoTec | Portal Estudiantil TecNM Matehuala</title>
     <style>
         :root {
             --azul-oscuro: #0f172a;
+            --azul-tecnm: #1b396a;
             --azul-primario: #0284c7;
             --verde: #16a34a;
             --verde-claro: #dcfce7;
@@ -92,17 +97,28 @@ HTML_TEMPLATE = """
             padding: 0;
         }
         .topbar {
-            background: var(--azul-oscuro);
-            color: white;
-            padding: 18px 30px;
+            background: white;
+            border-bottom: 4px solid var(--azul-tecnm);
+            padding: 14px 30px;
             display: flex;
             justify-content: space-between;
             align-items: center;
             flex-wrap: wrap;
-            gap: 10px;
+            gap: 15px;
+            box-shadow: 0 2px 6px rgba(15, 23, 42, 0.06);
         }
-        .topbar h1 { margin: 0; font-size: 21px; color: #38bdf8; }
-        .topbar p { margin: 3px 0 0; font-size: 13px; color: #cbd5e1; }
+        .brand-group {
+            display: flex;
+            align-items: center;
+            gap: 18px;
+            flex-wrap: wrap;
+        }
+        .logo-tecnm { height: 52px; width: auto; object-fit: contain; }
+        .logo-itmh { height: 56px; width: auto; object-fit: contain; }
+        .brand-text h1 { margin: 0; font-size: 20px; color: var(--azul-tecnm); }
+        .brand-text p { margin: 2px 0 0; font-size: 13px; color: #475569; }
+        .right-actions { display: flex; align-items: center; gap: 14px; }
+
         .container { max-width: 1080px; margin: 24px auto; padding: 0 20px; }
 
         .grid { display: grid; grid-template-columns: 1fr 1.2fr; gap: 22px; }
@@ -118,6 +134,7 @@ HTML_TEMPLATE = """
         .subtitle { margin: 0 0 18px; font-size: 13.5px; color: #64748b; }
 
         label { display: block; font-weight: 600; font-size: 13.5px; margin-bottom: 6px; color: #334155; }
+        .hint { display: block; font-size: 12px; color: #64748b; margin: -10px 0 14px; }
         input[type="text"], select {
             width: 100%;
             padding: 10px 12px;
@@ -139,7 +156,7 @@ HTML_TEMPLATE = """
             border: 1px solid #e2e8f0;
         }
         button.primary {
-            background: var(--azul-primario);
+            background: var(--azul-tecnm);
             color: white;
             border: none;
             padding: 12px;
@@ -149,7 +166,7 @@ HTML_TEMPLATE = """
             cursor: pointer;
             width: 100%;
         }
-        button.primary:hover { background: #0369a1; }
+        button.primary:hover { background: #13294d; }
         button.success {
             background: var(--verde);
             color: white;
@@ -161,12 +178,13 @@ HTML_TEMPLATE = """
             cursor: pointer;
         }
         button.reset {
-            background: transparent;
-            color: #fca5a5;
-            border: 1px solid #f87171;
-            padding: 6px 12px;
+            background: #fff1f2;
+            color: var(--rojo);
+            border: 1px solid #fecdd3;
+            padding: 7px 12px;
             border-radius: 6px;
             font-size: 12px;
+            font-weight: 600;
             cursor: pointer;
         }
         button.reset:hover { background: var(--rojo); color: white; }
@@ -210,13 +228,19 @@ HTML_TEMPLATE = """
 <body>
 
 <div class="topbar">
-    <div>
-        <h1>VeranoTec · Portal del Estudiante</h1>
-        <p>Solicitud de Cursos de Verano en Línea · TecNM Campus Matehuala (Datos Simulados)</p>
+    <div class="brand-group">
+        <img src="{{ url_for('static', filename='logo_tecnm.png') }}" alt="Tecnológico Nacional de México" class="logo-tecnm" onerror="this.style.display='none'">
+        <div class="brand-text">
+            <h1>VeranoTec · Portal del Estudiante</h1>
+            <p>Instituto Tecnológico de Matehuala · Cursos de Verano en Línea</p>
+        </div>
     </div>
-    <form action="/reiniciar_demo" method="POST" style="margin:0;">
-        <button type="submit" class="reset">Reiniciar Simulación</button>
-    </form>
+    <div class="right-actions">
+        <form action="/reiniciar_demo" method="POST" style="margin:0;">
+            <button type="submit" class="reset">Reiniciar Simulación</button>
+        </form>
+        <img src="{{ url_for('static', filename='logo_itmh.jpg') }}" alt="Instituto Tecnológico de Matehuala" class="logo-itmh" onerror="this.style.display='none'">
+    </div>
 </div>
 
 <div class="container">
@@ -233,11 +257,14 @@ HTML_TEMPLATE = """
         <!-- COLUMNA IZQUIERDA: FORMULARIO DEL ALUMNO -->
         <div class="card">
             <h2>1. Solicitar Curso de Verano</h2>
-            <p class="subtitle">Ingresa tus datos escolares y selecciona la materia. El sistema validará automáticamente tu kárdex y el cupo máximo del grupo (10 lugares).</p>
+            <p class="subtitle">Ingresa tu número de control institucional y selecciona la materia. El grupo se abre y cierra automáticamente al completar 6 alumnos.</p>
 
             <form action="/solicitar" method="POST">
-                <label for="num_control">Número de Control (8 dígitos):</label>
-                <input type="text" id="num_control" name="num_control" placeholder="Ej. 24660123" pattern="[0-9]{8}" required>
+                <label for="num_control">Número de Control Institucional (ITMH):</label>
+                <input type="text" id="num_control" name="num_control" placeholder="Ej. 24660462" maxlength="8"
+                       pattern="(24|25|26)660(00[1-9]|0[1-9][0-9]|[1-4][0-9]{2}|500)"
+                       title="Formato válido: Año (24, 25 o 26) + Plantel (660) + Consecutivo (001 al 500). Ejemplo: 24660462" required>
+                <span class="hint">Estructura: Año (<b>24-26</b>) + Plantel (<b>660</b>) + Lista (<b>001-500</b>). Ej: <code>24660462</code></span>
 
                 <label for="nombre_alumno">Nombre o Alias Simulado:</label>
                 <input type="text" id="nombre_alumno" name="nombre_alumno" placeholder="Ej. Alumno Prueba 01" required>
@@ -253,7 +280,7 @@ HTML_TEMPLATE = """
                 <select id="materia_id" name="materia_id">
                     {% for m in materias %}
                     <option value="{{ m['id'] }}" data-carrera="{{ m['carrera'] }}" {{ 'disabled' if m['total_inscritos'] >= m['minimo'] else '' }}>
-                        {{ m['clave'] }} · {{ m['nombre'] }} — {{ '[GRUPO LLENO 10/10]' if m['total_inscritos'] >= m['minimo'] else 'Prof: ' + m['docente'] }}
+                        {{ m['clave'] }} · {{ m['nombre'] }} — {{ '[GRUPO LLENO 6/6]' if m['total_inscritos'] >= m['minimo'] else 'Prof: ' + m['docente'] }}
                     </option>
                     {% endfor %}
                 </select>
@@ -272,7 +299,7 @@ HTML_TEMPLATE = """
         <!-- COLUMNA DERECHA: OFERTA DE CURSOS Y PROFESORES -->
         <div class="card">
             <h2>2. Oferta de Verano y Docentes Asignados</h2>
-            <p class="subtitle">Consulta qué materias están disponibles para tu carrera, quién las imparte y el cupo del grupo (máximo 10 alumnos).</p>
+            <p class="subtitle">Consulta las materias disponibles para tu carrera, el docente asignado y el cupo del grupo (mínimo y máximo 6 alumnos).</p>
 
             {% for m in materias %}
             {% set pct = (m['total_inscritos'] / m['minimo'] * 100)|int %}
@@ -304,7 +331,7 @@ HTML_TEMPLATE = """
     <!-- SECCIÓN INFERIOR: MIS SOLICITUDES, REFERENCIA DE PAGO Y HORARIO -->
     <div class="card">
         <h2>3. Mis Solicitudes Registradas y Referencias de Pago</h2>
-        <p class="subtitle">Tu solicitud queda guardada automáticamente en la base de datos. Cuando el grupo alcanza los 10 alumnos, se abre y libera tu referencia de pago y horario oficial.</p>
+        <p class="subtitle">Tu solicitud queda guardada automáticamente en la base de datos. Cuando el grupo alcanza los 6 alumnos, se abre y libera tu referencia de pago y horario oficial.</p>
 
         {% if mis_solicitudes %}
         <table>
@@ -398,7 +425,7 @@ def index():
         SELECT i.*, m.nombre as materia_nombre, m.docente, m.horario, m.minimo,
                (SELECT COUNT(*) FROM inscripciones WHERE materia_id = m.id) as total_grupo
         FROM inscripciones i JOIN materias m ON i.materia_id = m.id
-        WHERE i.num_control NOT LIKE '246609%'
+        WHERE i.num_control NOT LIKE '246609%' AND i.num_control NOT LIKE '256609%'
         ORDER BY i.id DESC
     """).fetchall()
     conn.close()
@@ -412,6 +439,11 @@ def solicitar():
     mid = request.form.get("materia_id")
     cumple_kardex = request.form.get("cumple_kardex") == "si"
 
+    # Validación estricta del formato de número de control ITMH (Año 24-26 + 660 + 001-500)
+    if not REGEX_CONTROL.match(num_control):
+        flash(f"Número de control inválido ('{num_control}'): Debe iniciar con año 24, 25 o 26, seguido de 660 (TecNM Matehuala) y un consecutivo del 001 al 500 (ej. 24660462).", "err")
+        return redirect(url_for("index"))
+
     if not mid:
         flash("No hay cursos seleccionados o disponibles.", "err")
         return redirect(url_for("index"))
@@ -420,26 +452,26 @@ def solicitar():
     materia = conn.execute("SELECT * FROM materias WHERE id = ?", (mid,)).fetchone()
     total_actual = conn.execute("SELECT COUNT(*) FROM inscripciones WHERE materia_id = ?", (mid,)).fetchone()[0]
 
-    # Validación 0: Bloqueo estricto si el grupo ya está lleno (10/10)
+    # Bloqueo estricto si el grupo ya está lleno (6/6)
     if total_actual >= materia["minimo"]:
         conn.close()
         flash(f"Inscripción rechazada: El grupo de {materia['nombre']} ({materia['clave']}) ya está lleno ({total_actual}/{materia['minimo']}) y no admite más alumnos.", "err")
         return redirect(url_for("index"))
 
-    # Validación 1: Prerrequisitos de kárdex
+    # Validación de prerrequisitos de kárdex
     if not cumple_kardex:
         conn.close()
         flash(f"Solicitud bloqueada: El kárdex indica que no cumples el prerrequisito ({materia['prerrequisito']}) o ya aprobaste esta materia.", "err")
         return redirect(url_for("index"))
 
-    # Validación 2: Máximo 2 materias de verano por alumno (Lineamiento TecNM)
+    # Máximo 2 materias de verano por alumno (Lineamiento TecNM)
     materias_alumno = conn.execute("SELECT COUNT(*) FROM inscripciones WHERE num_control = ?", (num_control,)).fetchone()[0]
     if materias_alumno >= 2:
         conn.close()
         flash(f"Límite alcanzado: El alumno {num_control} ya tiene 2 materias registradas en verano (máximo permitido por reglamento).", "err")
         return redirect(url_for("index"))
 
-    # Validación 3: Evitar registro duplicado
+    # Evitar registro duplicado
     existe = conn.execute("SELECT 1 FROM inscripciones WHERE num_control = ? AND materia_id = ?", (num_control, mid)).fetchone()
     if existe:
         conn.close()
@@ -455,7 +487,7 @@ def solicitar():
 
     total = conn.execute("SELECT COUNT(*) FROM inscripciones WHERE materia_id = ?", (mid,)).fetchone()[0]
 
-    # Apertura y cierre de cupo al llegar a 10/10
+    # Apertura y cierre de cupo al llegar a 6/6
     if total >= materia["minimo"]:
         conn.execute("UPDATE materias SET estado = 'Grupo Lleno (Cupo Completo)' WHERE id = ?", (mid,))
         conn.execute("UPDATE inscripciones SET referencia = 'REF-2026-' || materia_id || '-' || substr(num_control, -4) WHERE materia_id = ? AND referencia IS NULL", (mid,))
@@ -487,7 +519,7 @@ def reiniciar_demo():
     """)
     conn.close()
     init_db()
-    flash("Simulación reiniciada correctamente.", "ok")
+    flash("Simulación reiniciada correctamente (cupo restablecido a 6 alumnos).", "ok")
     return redirect(url_for("index"))
 
 init_db()
