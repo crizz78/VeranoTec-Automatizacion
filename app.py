@@ -44,7 +44,7 @@ def init_db():
 
     if c.execute("SELECT COUNT(*) FROM materias").fetchone()[0] == 0:
         materias_init = [
-            ("FIS-01", "Ing. en Sistemas Computacionales", "SCC-1007", "Fundamentos de Ingeniería de Software", "Ing. Roberto Martínez (Simulado)", "Lun-Vie 08:00 - 10:00 | Aula CC-2", "Fundamentos de Programación", 10, "En espera (Falta 1 alumno)"),
+            ("FIS-01", "Ing. en Sistemas Computacionales", "SCC-1007", "Fundamentos de Ingeniería de Software", "Ing. Roberto Martínez (Simulado)", "Lun-Vie 08:00 - 10:00 | Aula CC-2", "Fundamentos de Programación", 10, "En espera (Falta 1 lugar)"),
             ("MAT-02", "Ing. en Sistemas Computacionales", "ACF-0902", "Cálculo Integral", "M.C. Laura Sánchez (Simulado)", "Lun-Vie 10:00 - 12:00 | Aula B-4", "Cálculo Diferencial", 10, "En recolección de demanda"),
             ("BDD-03", "Ing. en Sistemas Computacionales", "AEF-1031", "Fundamentos de Bases de Datos", "Ing. Carlos Hernández (Simulado)", "Lun-Vie 12:00 - 14:00 | Lab. Cómputo 1", "Taller de Programación", 10, "En recolección de demanda"),
             ("IND-01", "Ing. Industrial", "INC-1009", "Estudio del Trabajo I", "Ing. Patricia Gómez (Simulado)", "Lun-Vie 08:00 - 10:00 | Aula D-1", "Probabilidad y Estadística", 10, "En recolección de demanda"),
@@ -52,7 +52,7 @@ def init_db():
         ]
         c.executemany("INSERT INTO materias VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", materias_init)
 
-        # Precarga de 9 alumnos simulados en SCC-1007 para demostrar la apertura automática al entrar el #10
+        # Precarga de 9 alumnos simulados en SCC-1007 para demostrar el cierre de cupo al entrar el #10
         precarga_fis = [(f"2466090{i}", f"Alumno Simulado {i}", "Ing. en Sistemas Computacionales", "FIS-01", None, 0, "2026-11-25 08:00:00") for i in range(1, 10)]
         precarga_mat = [(f"2466091{i}", f"Alumno Simulado {i}", "Ing. en Sistemas Computacionales", "MAT-02", None, 0, "2026-11-25 08:00:00") for i in range(1, 6)]
         c.executemany("INSERT INTO inscripciones (num_control, nombre_alumno, carrera, materia_id, referencia, pagado, fecha_registro) VALUES (?, ?, ?, ?, ?, ?, ?)", precarga_fis + precarga_mat)
@@ -79,6 +79,7 @@ HTML_TEMPLATE = """
             --ambar: #d97706;
             --ambar-claro: #fef3c7;
             --rojo: #dc2626;
+            --rojo-claro: #fee2e2;
             --fondo: #f1f5f9;
             --borde: #cbd5e1;
         }
@@ -182,11 +183,12 @@ HTML_TEMPLATE = """
         .course-meta { font-size: 13px; color: #475569; margin-top: 6px; line-height: 1.5; }
         .progress-wrap { background: #e2e8f0; border-radius: 99px; height: 9px; overflow: hidden; margin: 8px 0 4px; }
         .progress-bar { height: 100%; background: var(--azul-primario); }
-        .progress-bar.full { background: var(--verde); }
+        .progress-bar.full { background: var(--rojo); }
 
         .pill { padding: 4px 10px; border-radius: 99px; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
         .pill-wait { background: var(--ambar-claro); color: #92400e; }
         .pill-open { background: var(--verde-claro); color: #166534; }
+        .pill-full { background: var(--rojo-claro); color: #991b1b; }
 
         table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
         th { background: #f1f5f9; text-align: left; padding: 10px; border-bottom: 2px solid #e2e8f0; color: #334155; }
@@ -200,7 +202,7 @@ HTML_TEMPLATE = """
             font-weight: 500;
         }
         .alert-ok { background: var(--verde-claro); color: #14532d; border-left: 5px solid var(--verde); }
-        .alert-err { background: #fee2e2; color: #7f1d1d; border-left: 5px solid var(--rojo); }
+        .alert-err { background: var(--rojo-claro); color: #7f1d1d; border-left: 5px solid var(--rojo); }
 
         @media (max-width: 820px) { .grid { grid-template-columns: 1fr; } }
     </style>
@@ -231,7 +233,7 @@ HTML_TEMPLATE = """
         <!-- COLUMNA IZQUIERDA: FORMULARIO DEL ALUMNO -->
         <div class="card">
             <h2>1. Solicitar Curso de Verano</h2>
-            <p class="subtitle">Ingresa tus datos escolares y selecciona la materia. El sistema validará automáticamente tu kárdex y el cupo del grupo.</p>
+            <p class="subtitle">Ingresa tus datos escolares y selecciona la materia. El sistema validará automáticamente tu kárdex y el cupo máximo del grupo (10 lugares).</p>
 
             <form action="/solicitar" method="POST">
                 <label for="num_control">Número de Control (8 dígitos):</label>
@@ -250,8 +252,8 @@ HTML_TEMPLATE = """
                 <label for="materia_id">Curso de Verano Disponible:</label>
                 <select id="materia_id" name="materia_id">
                     {% for m in materias %}
-                    <option value="{{ m['id'] }}" data-carrera="{{ m['carrera'] }}">
-                        {{ m['clave'] }} · {{ m['nombre'] }} — Prof: {{ m['docente'] }}
+                    <option value="{{ m['id'] }}" data-carrera="{{ m['carrera'] }}" {{ 'disabled' if m['total_inscritos'] >= m['minimo'] else '' }}>
+                        {{ m['clave'] }} · {{ m['nombre'] }} — {{ '[GRUPO LLENO 10/10]' if m['total_inscritos'] >= m['minimo'] else 'Prof: ' + m['docente'] }}
                     </option>
                     {% endfor %}
                 </select>
@@ -270,15 +272,16 @@ HTML_TEMPLATE = """
         <!-- COLUMNA DERECHA: OFERTA DE CURSOS Y PROFESORES -->
         <div class="card">
             <h2>2. Oferta de Verano y Docentes Asignados</h2>
-            <p class="subtitle">Consulta qué materias están disponibles para tu carrera, quién las imparte y cuántos alumnos faltan para abrir el grupo (mínimo 10).</p>
+            <p class="subtitle">Consulta qué materias están disponibles para tu carrera, quién las imparte y el cupo del grupo (máximo 10 alumnos).</p>
 
             {% for m in materias %}
             {% set pct = (m['total_inscritos'] / m['minimo'] * 100)|int %}
+            {% set lleno = m['total_inscritos'] >= m['minimo'] %}
             <div class="course-item" data-carrera="{{ m['carrera'] }}">
                 <div class="course-header">
                     <div class="course-title">{{ m['clave'] }} · {{ m['nombre'] }}</div>
-                    <span class="pill {{ 'pill-open' if m['total_inscritos'] >= m['minimo'] else 'pill-wait' }}">
-                        {{ m['estado'] }}
+                    <span class="pill {{ 'pill-full' if lleno else 'pill-wait' }}">
+                        {{ 'Grupo Lleno (Cupo Completo)' if lleno else m['estado'] }}
                     </span>
                 </div>
                 <div class="course-meta">
@@ -288,9 +291,11 @@ HTML_TEMPLATE = """
                     <strong>Prerrequisito:</strong> {{ m['prerrequisito'] }}
                 </div>
                 <div class="progress-wrap">
-                    <div class="progress-bar {{ 'full' if pct >= 100 else '' }}" style="width: {{ 100 if pct > 100 else pct }}%;"></div>
+                    <div class="progress-bar {{ 'full' if lleno else '' }}" style="width: {{ 100 if pct > 100 else pct }}%;"></div>
                 </div>
-                <small style="color:#334155;"><strong>{{ m['total_inscritos'] }} de {{ m['minimo'] }} alumnos inscritos</strong></small>
+                <small style="color: {{ '#991b1b' if lleno else '#334155' }};">
+                    <strong>{{ m['total_inscritos'] }} de {{ m['minimo'] }} alumnos inscritos {{ '· Sin lugares disponibles' if lleno else '' }}</strong>
+                </small>
             </div>
             {% endfor %}
         </div>
@@ -299,7 +304,7 @@ HTML_TEMPLATE = """
     <!-- SECCIÓN INFERIOR: MIS SOLICITUDES, REFERENCIA DE PAGO Y HORARIO -->
     <div class="card">
         <h2>3. Mis Solicitudes Registradas y Referencias de Pago</h2>
-        <p class="subtitle">Tu solicitud queda guardada automáticamente en la base de datos. Cuando el grupo alcanza los 10 alumnos, se libera tu referencia de pago y horario oficial.</p>
+        <p class="subtitle">Tu solicitud queda guardada automáticamente en la base de datos. Cuando el grupo alcanza los 10 alumnos, se abre y libera tu referencia de pago y horario oficial.</p>
 
         {% if mis_solicitudes %}
         <table>
@@ -317,7 +322,7 @@ HTML_TEMPLATE = """
                 <td><strong>{{ s['materia_nombre'] }}</strong><br><small>{{ s['docente'] }}</small></td>
                 <td>
                     {% if s['total_grupo'] >= s['minimo'] %}
-                        <span class="pill pill-open">Grupo Abierto ({{ s['total_grupo'] }}/{{ s['minimo'] }})</span>
+                        <span class="pill pill-open">Grupo Confirmado y Lleno ({{ s['total_grupo'] }}/{{ s['minimo'] }})</span>
                     {% else %}
                         <span class="pill pill-wait">En espera ({{ s['total_grupo'] }}/{{ s['minimo'] }})</span>
                     {% endif %}
@@ -349,17 +354,23 @@ HTML_TEMPLATE = """
     function filtrarMaterias() {
         const carreraSel = document.getElementById('carrera').value;
         const selectMat = document.getElementById('materia_id');
-        let primeraVisible = null;
+        let primeraDisponible = null;
+        let primeraDeCarrera = null;
 
         for (let opt of selectMat.options) {
             if (opt.dataset.carrera === carreraSel) {
                 opt.style.display = 'block';
-                if (!primeraVisible) primeraVisible = opt.value;
+                if (!primeraDeCarrera) primeraDeCarrera = opt.value;
+                if (!opt.disabled && !primeraDisponible) primeraDisponible = opt.value;
             } else {
                 opt.style.display = 'none';
             }
         }
-        if (primeraVisible) selectMat.value = primeraVisible;
+        if (primeraDisponible) {
+            selectMat.value = primeraDisponible;
+        } else if (primeraDeCarrera) {
+            selectMat.value = primeraDeCarrera;
+        }
 
         document.querySelectorAll('.course-item').forEach(card => {
             card.style.display = (card.dataset.carrera === carreraSel) ? 'block' : 'none';
@@ -398,11 +409,22 @@ def solicitar():
     num_control = request.form["num_control"].strip()
     nombre_alumno = request.form["nombre_alumno"].strip()
     carrera = request.form["carrera"]
-    mid = request.form["materia_id"]
+    mid = request.form.get("materia_id")
     cumple_kardex = request.form.get("cumple_kardex") == "si"
+
+    if not mid:
+        flash("No hay cursos seleccionados o disponibles.", "err")
+        return redirect(url_for("index"))
 
     conn = get_db()
     materia = conn.execute("SELECT * FROM materias WHERE id = ?", (mid,)).fetchone()
+    total_actual = conn.execute("SELECT COUNT(*) FROM inscripciones WHERE materia_id = ?", (mid,)).fetchone()[0]
+
+    # Validación 0: Bloqueo estricto si el grupo ya está lleno (10/10)
+    if total_actual >= materia["minimo"]:
+        conn.close()
+        flash(f"Inscripción rechazada: El grupo de {materia['nombre']} ({materia['clave']}) ya está lleno ({total_actual}/{materia['minimo']}) y no admite más alumnos.", "err")
+        return redirect(url_for("index"))
 
     # Validación 1: Prerrequisitos de kárdex
     if not cumple_kardex:
@@ -433,15 +455,14 @@ def solicitar():
 
     total = conn.execute("SELECT COUNT(*) FROM inscripciones WHERE materia_id = ?", (mid,)).fetchone()[0]
 
-    # Apertura automática al llegar al mínimo
+    # Apertura y cierre de cupo al llegar a 10/10
     if total >= materia["minimo"]:
-        conn.execute("UPDATE materias SET estado = 'Grupo Abierto · Listo para Pago' WHERE id = ?", (mid,))
-        # Asegura que todos los inscritos tengan referencia generada
+        conn.execute("UPDATE materias SET estado = 'Grupo Lleno (Cupo Completo)' WHERE id = ?", (mid,))
         conn.execute("UPDATE inscripciones SET referencia = 'REF-2026-' || materia_id || '-' || substr(num_control, -4) WHERE materia_id = ? AND referencia IS NULL", (mid,))
-        flash(f"¡Solicitud registrada para {num_control}! Se alcanzó el cupo mínimo ({total}/10), el grupo se abrió automáticamente y tu referencia de pago ya está disponible.", "ok")
+        flash(f"¡Solicitud registrada para {num_control}! Se completó el cupo ({total}/{materia['minimo']}), el grupo quedó lleno y tu referencia de pago ya está disponible.", "ok")
     else:
         faltan = materia["minimo"] - total
-        flash(f"¡Solicitud guardada para {num_control}! Faltan {faltan} alumnos para abrir el grupo de {materia['nombre']}.", "ok")
+        flash(f"¡Solicitud guardada para {num_control}! Faltan {faltan} lugares para completar el grupo de {materia['nombre']}.", "ok")
 
     conn.commit()
     conn.close()
