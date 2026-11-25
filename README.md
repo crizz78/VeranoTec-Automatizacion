@@ -7,14 +7,15 @@
 
 ---
 
-## 📄 Documentación Ejecutiva
+## 🚀 Acceso Rápido al Sistema y Documentación
+* **🌐 Enlace de Acceso Local a la Aplicación Web:** [Abrir VeranoTec (`http://127.0.0.1:5000`)](http://127.0.0.1:5000) *(Nota: requiere tener iniciado el servidor local con `python app.py`)*
 * **📘 Libro Final de Consultoría Completo (PDF):** [Abrir / Descargar `Libro_Final_Consultoria_VeranoTec.pdf`](./Libro_Final_Consultoria_VeranoTec.pdf)
 
 ---
 
 ## 📌 Resumen Ejecutivo del Proyecto
 * **Problema (AS-IS):** En el TecNM Campus Matehuala, la demanda de cursos de verano se organiza mediante listas informales en papel o grupos de mensajería. El **22 %** de las solicitudes presentan alumnos sin prerrequisitos de kárdex, existe una espera de **4 a 6 días hábiles** de incertidumbre y el **15.4 %** (4 de 26 encuestados) pagaron grupos que terminaron cancelándose.
-* **Solución (TO-BE):** Plataforma web con base de datos relacional (`veranotec.db` en SQLite / esquema SQL) donde el alumno solicita su materia, el sistema valida automáticamente su kárdex, contabiliza la demanda en tiempo real, cambia el estado a **«Por abrir»** al alcanzar el mínimo reglamentario, permite a la Jefatura asignar docente con un clic y emite referencias de pago únicamente cuando el grupo está confirmado.
+* **Solución (TO-BE):** Plataforma web con base de datos relacional (`veranotec.db` en SQLite) donde el alumno solicita su materia, el sistema valida automáticamente su kárdex, contabiliza la demanda en tiempo real, cambia el estado a **«Por abrir»** al alcanzar el mínimo reglamentario, permite a la Jefatura asignar docente con un clic y emite referencias de pago únicamente cuando el grupo está confirmado.
 * **Resultados Medidos:** Reducción del tiempo de confirmación de grupo de **4–6 días a 12 minutos operativos**, **0 %** de pagos anticipados en grupos cancelados y puntaje promedio de usabilidad **SUS de 84.5 / 100** (evaluado con 5 usuarios reales).
 
 ---
@@ -36,7 +37,7 @@
 
 ---
 
-## 💻 Ejecución Local del Prototipo Web (Python + Flask + SQLite)
-1. Instalar dependencias:
+## 💻 Cómo Iniciar el Servidor para Ingresar al Enlace
+1. Clonar o descargar este repositorio e instalar dependencias:
    ```bash
    pip install -r requirements.txt
